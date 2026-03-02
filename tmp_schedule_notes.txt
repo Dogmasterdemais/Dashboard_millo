@@ -1,0 +1,8 @@
+This temporary file documents algorithm for schedule chart:
+- Fetch appointments (filtered by current filters)
+- Build time slots 00:00..23:59 stepping by slotMinutes
+- For each appointment, get time-of-day minute index -> slot
+- Aggregate counts per modality per slot
+- Modalities => datasets
+- Chart: stacked bar with x labels time slots, datasets modalities
+- Controls: slot size select triggers re-render without refetch

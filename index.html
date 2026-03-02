@@ -1,0 +1,509 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard Analítico - Clínicas</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+
+        header {
+            background: white;
+            padding: 30px;
+            border-radius: 10px;
+            margin-bottom: 30px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+
+        h1 {
+            color: #333;
+            margin-bottom: 10px;
+        }
+
+        .filters {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin-top: 20px;
+        }
+
+        .filter-group {
+            display: flex;
+            flex-direction: column;
+        }
+
+        label {
+            font-weight: 600;
+            margin-bottom: 5px;
+            color: #555;
+            font-size: 14px;
+        }
+
+        select, input {
+            padding: 10px;
+            border: 2px solid #ddd;
+            border-radius: 5px;
+            font-size: 14px;
+            transition: border-color 0.3s;
+        }
+
+        select:focus, input:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+
+        .btn-group {
+            display: flex;
+            gap: 10px;
+            margin-top: 20px;
+        }
+
+        button {
+            padding: 12px 24px;
+            background: #667eea;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-weight: 600;
+            font-size: 14px;
+            transition: background 0.3s;
+        }
+
+        button:hover {
+            background: #764ba2;
+        }
+
+        button.secondary {
+            background: #f0f0f0;
+            color: #333;
+        }
+
+        button.secondary:hover {
+            background: #e0e0e0;
+        }
+
+        .dashboard {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+
+        .card {
+            background: white;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            transition: transform 0.3s;
+        }
+
+        .card:hover {
+            transform: translateY(-5px);
+        }
+
+        .card h2 {
+            color: #333;
+            font-size: 18px;
+            margin-bottom: 15px;
+            border-bottom: 2px solid #667eea;
+            padding-bottom: 10px;
+        }
+
+        .chart-container {
+            position: relative;
+            height: 350px;
+        }
+
+        .summary {
+            background: white;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            margin-bottom: 20px;
+        }
+
+        .summary-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 20px;
+            margin-top: 15px;
+        }
+
+        .summary-item {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 20px;
+            border-radius: 8px;
+            text-align: center;
+        }
+
+        .summary-item .label {
+            font-size: 14px;
+            opacity: 0.9;
+            margin-bottom: 5px;
+        }
+
+        .summary-item .value {
+            font-size: 32px;
+            font-weight: bold;
+        }
+
+        .loading {
+            text-align: center;
+            padding: 40px;
+            color: #999;
+        }
+
+        .error {
+            background: #fee;
+            color: #c33;
+            padding: 15px;
+            border-radius: 5px;
+            margin-bottom: 20px;
+            border-left: 4px solid #c33;
+        }
+
+        .success {
+            background: #efe;
+            color: #3c3;
+            padding: 15px;
+            border-radius: 5px;
+            margin-bottom: 20px;
+            border-left: 4px solid #3c3;
+        }
+
+        @media (max-width: 768px) {
+            .dashboard {
+                grid-template-columns: 1fr;
+            }
+
+            .filters {
+                grid-template-columns: 1fr;
+            }
+
+            .chart-container {
+                height: 300px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>📊 Dashboard Analítico de Agendamentos</h1>
+            <p>Análise de agendamentos por período, convênio, idade e especialidade</p>
+            
+            <div class="filters">
+                <div class="filter-group">
+                    <label for="period">Período</label>
+                    <select id="period" onchange="updateDateInputs()">
+                        <option value="day">Dia</option>
+                        <option value="week">Semana</option>
+                        <option value="month" selected>Mês</option>
+                        <option value="custom">Customizado</option>
+                    </select>
+                </div>
+
+                <div class="filter-group">
+                    <label for="insurance">Convênio</label>
+                    <select id="insurance">
+                        <option value="">Todos</option>
+                    </select>
+                </div>
+
+                <div class="filter-group">
+                    <label for="ageGroup">Faixa Etária</label>
+                    <select id="ageGroup">
+                        <option value="">Todos</option>
+                        <option value="under18">Menores de 18 anos</option>
+                        <option value="over18">Maiores de 18 anos</option>
+                    </select>
+                </div>
+
+                <div class="filter-group">
+                    <label for="specialty">Especialidade</label>
+                    <select id="specialty">
+                        <option value="">Todas</option>
+                    </select>
+                </div>
+
+                <div class="filter-group" id="startDateGroup" style="display: none;">
+                    <label for="startDate">Data Inicial</label>
+                    <input type="date" id="startDate">
+                </div>
+
+                <div class="filter-group" id="endDateGroup" style="display: none;">
+                    <label for="endDate">Data Final</label>
+                    <input type="date" id="endDate">
+                </div>
+            </div>
+
+            <div class="btn-group">
+                <button onclick="loadDashboard()">🔄 Carregar Dashboard</button>
+                <button class="secondary" onclick="clearFilters()">✕ Limpar Filtros</button>
+            </div>
+        </header>
+
+        <div id="message"></div>
+        <div id="summary"></div>
+        <div class="dashboard" id="dashboard">
+            <div class="loading">Carregando dashboard...</div>
+        </div>
+    </div>
+
+    <script>
+        const API_BASE = 'http://localhost:3000/api';
+
+        // Inicializar página
+        async function init() {
+            await loadInsurances();
+            await loadSpecialties();
+            await loadDashboard();
+        }
+
+        // Atualizar inputs de data customizados
+        function updateDateInputs() {
+            const period = document.getElementById('period').value;
+            const startDateGroup = document.getElementById('startDateGroup');
+            const endDateGroup = document.getElementById('endDateGroup');
+            
+            if (period === 'custom') {
+                startDateGroup.style.display = 'flex';
+                endDateGroup.style.display = 'flex';
+            } else {
+                startDateGroup.style.display = 'none';
+                endDateGroup.style.display = 'none';
+            }
+        }
+
+        // Carregar lista de convênios
+        async function loadInsurances() {
+            try {
+                const response = await fetch(`${API_BASE}/appointments?period=month`);
+                const data = await response.json();
+                
+                const insurances = [...new Set(data.data.map(apt => apt.insurance).filter(i => i))];
+                const select = document.getElementById('insurance');
+                
+                insurances.forEach(insurance => {
+                    const option = document.createElement('option');
+                    option.value = insurance;
+                    option.textContent = insurance;
+                    select.appendChild(option);
+                });
+            } catch (error) {
+                console.error('Erro ao carregar convênios:', error);
+            }
+        }
+
+        // Carregar lista de especialidades
+        async function loadSpecialties() {
+            try {
+                const response = await fetch(`${API_BASE}/appointments?period=month`);
+                const data = await response.json();
+                
+                const specialties = [...new Set(data.data.map(apt => apt.specialty).filter(s => s))];
+                const select = document.getElementById('specialty');
+                
+                specialties.forEach(specialty => {
+                    const option = document.createElement('option');
+                    option.value = specialty;
+                    option.textContent = specialty;
+                    select.appendChild(option);
+                });
+            } catch (error) {
+                console.error('Erro ao carregar especialidades:', error);
+            }
+        }
+
+        // Construir query string
+        function getQueryString() {
+            const period = document.getElementById('period').value;
+            const insurance = document.getElementById('insurance').value;
+            const ageGroup = document.getElementById('ageGroup').value;
+            const specialty = document.getElementById('specialty').value;
+            const startDate = document.getElementById('startDate').value;
+            const endDate = document.getElementById('endDate').value;
+
+            let query = `period=${period}`;
+            if (insurance) query += `&insurance=${insurance}`;
+            if (ageGroup) query += `&ageGroup=${ageGroup}`;
+            if (specialty) query += `&specialty=${specialty}`;
+            if (startDate) query += `&startDate=${startDate}`;
+            if (endDate) query += `&endDate=${endDate}`;
+
+            return query;
+        }
+
+        // Carregar dashboard
+        async function loadDashboard() {
+            try {
+                const query = getQueryString();
+                const response = await fetch(`${API_BASE}/analytics/dashboard?${query}`);
+                const result = await response.json();
+
+                if (result.success) {
+                    renderDashboard(result.data);
+                    clearMessage();
+                } else {
+                    showError(result.error);
+                }
+            } catch (error) {
+                showError('Erro ao carregar dashboard: ' + error.message);
+            }
+        }
+
+        // Renderizar dashboard
+        async function renderDashboard(data) {
+            const { summary, specialtyDistribution, insuranceDistribution, ageGroupDistribution } = data;
+
+            // Renderizar summary
+            const summaryHtml = `
+                <div class="summary-grid">
+                    <div class="summary-item">
+                        <div class="label">Total de Agendamentos</div>
+                        <div class="value">${summary.totalAppointments}</div>
+                    </div>
+                    <div class="summary-item">
+                        <div class="label">Média por Dia</div>
+                        <div class="value">${summary.averageAppointmentsPerDay}</div>
+                    </div>
+                    <div class="summary-item">
+                        <div class="label">Período</div>
+                        <div class="value">${summary.period}</div>
+                    </div>
+                </div>
+            `;
+            document.getElementById('summary').innerHTML = summaryHtml;
+
+            // Renderizar gráficos
+            let dashboard = `
+                <div class="card">
+                    <h2>📋 Agendamentos por Especialidade</h2>
+                    <div class="chart-container">
+                        <canvas id="specialtyChart"></canvas>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <h2>🏥 Agendamentos por Convênio</h2>
+                    <div class="chart-container">
+                        <canvas id="insuranceChart"></canvas>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <h2>👥 Agendamentos por Faixa Etária</h2>
+                    <div class="chart-container">
+                        <canvas id="ageChart"></canvas>
+                    </div>
+                </div>
+            `;
+
+            document.getElementById('dashboard').innerHTML = dashboard;
+
+            // Criar gráficos
+            createChart('specialtyChart', 'bar', specialtyDistribution.labels, specialtyDistribution.data, 'Especialidades');
+            createChart('insuranceChart', 'doughnut', insuranceDistribution.labels, insuranceDistribution.data, 'Convênios');
+            createChart('ageChart', 'pie', ageGroupDistribution.labels, ageGroupDistribution.data, 'Faixa Etária');
+        }
+
+        // Criar gráfico com Chart.js
+        function createChart(canvasId, type, labels, data, label) {
+            const canvas = document.getElementById(canvasId);
+            if (window.charts && window.charts[canvasId]) {
+                window.charts[canvasId].destroy();
+            }
+
+            if (!window.charts) window.charts = {};
+
+            const colors = [
+                '#667eea', '#764ba2', '#f093fb', '#4facfe', '#00f2fe',
+                '#43e97b', '#fa709a', '#fee140', '#30cfd0', '#330867'
+            ];
+
+            window.charts[canvasId] = new Chart(canvas, {
+                type: type,
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        label: label,
+                        data: data,
+                        backgroundColor: colors.slice(0, labels.length),
+                        borderColor: '#fff',
+                        borderWidth: 2,
+                        tension: 0.3
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            position: 'bottom',
+                            labels: {
+                                padding: 15,
+                                font: { size: 12 }
+                            }
+                        }
+                    },
+                    scales: type === 'bar' ? {
+                        y: {
+                            beginAtZero: true,
+                            ticks: { stepSize: 1 }
+                        }
+                    } : {}
+                }
+            });
+        }
+
+        // Limpar filtros
+        function clearFilters() {
+            document.getElementById('period').value = 'month';
+            document.getElementById('insurance').value = '';
+            document.getElementById('ageGroup').value = '';
+            document.getElementById('specialty').value = '';
+            document.getElementById('startDate').value = '';
+            document.getElementById('endDate').value = '';
+            updateDateInputs();
+            loadDashboard();
+        }
+
+        // Mostrar mensagem de erro
+        function showError(message) {
+            document.getElementById('message').innerHTML = `<div class="error">❌ ${message}</div>`;
+        }
+
+        // Mostrar mensagem de sucesso
+        function showSuccess(message) {
+            document.getElementById('message').innerHTML = `<div class="success">✅ ${message}</div>`;
+        }
+
+        // Limpar mensagens
+        function clearMessage() {
+            document.getElementById('message').innerHTML = '';
+        }
+
+        // Inicializar ao carregar página
+        init();
+    </script>
+</body>
+</html>

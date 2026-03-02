@@ -1,0 +1,1152 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard Analítico - Clínicas</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+
+        header {
+            background: white;
+            padding: 30px;
+            border-radius: 10px;
+            margin-bottom: 30px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+
+        h1 {
+            color: #333;
+            margin-bottom: 10px;
+        }
+
+        .filters {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin-top: 20px;
+        }
+
+        .filter-group {
+            display: flex;
+            flex-direction: column;
+        }
+
+        label {
+            font-weight: 600;
+            margin-bottom: 5px;
+            color: #555;
+            font-size: 14px;
+        }
+
+        select, input {
+            padding: 10px;
+            border: 2px solid #ddd;
+            border-radius: 5px;
+            font-size: 14px;
+            transition: border-color 0.3s;
+        }
+
+        select:focus, input:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+
+        .btn-group {
+            display: flex;
+            gap: 10px;
+            margin-top: 20px;
+        }
+
+        button {
+            padding: 12px 24px;
+            background: #667eea;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-weight: 600;
+            font-size: 14px;
+            transition: background 0.3s;
+        }
+
+        button:hover {
+            background: #764ba2;
+        }
+
+        button.secondary {
+            background: #f0f0f0;
+            color: #333;
+        }
+
+        button.secondary:hover {
+            background: #e0e0e0;
+        }
+
+        .dashboard {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+
+        .card {
+            background: white;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            transition: transform 0.3s;
+        }
+
+        .card:hover {
+            transform: translateY(-5px);
+        }
+
+        .card h2 {
+            color: #333;
+            font-size: 18px;
+            margin-bottom: 15px;
+            border-bottom: 2px solid #667eea;
+            padding-bottom: 10px;
+        }
+
+        .chart-container {
+            position: relative;
+            height: 350px;
+        }
+
+        .summary {
+            background: white;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            margin-bottom: 20px;
+        }
+
+        .summary-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 20px;
+            margin-top: 15px;
+        }
+
+        .summary-item {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 20px;
+            border-radius: 8px;
+            text-align: center;
+        }
+
+        .summary-item .label {
+            font-size: 14px;
+            opacity: 0.9;
+            margin-bottom: 5px;
+        }
+
+        .summary-item .value {
+            font-size: 32px;
+            font-weight: bold;
+        }
+
+        .loading {
+            text-align: center;
+            padding: 40px;
+            color: #999;
+        }
+
+        .error {
+            background: #fee;
+            color: #c33;
+            padding: 15px;
+            border-radius: 5px;
+            margin-bottom: 20px;
+            border-left: 4px solid #c33;
+        }
+
+        .success {
+            background: #efe;
+            color: #3c3;
+            padding: 15px;
+            border-radius: 5px;
+            margin-bottom: 20px;
+            border-left: 4px solid #3c3;
+        }
+
+        @media (max-width: 768px) {
+            .dashboard {
+                grid-template-columns: 1fr;
+            }
+
+            .filters {
+                grid-template-columns: 1fr;
+            }
+
+            .chart-container {
+                height: 300px;
+            }
+        }
+
+        .table-container {
+            background: white;
+            border-radius: 10px;
+            padding: 20px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            margin-top: 30px;
+            overflow-x: auto;
+        }
+
+        .table-container h2 {
+            margin-bottom: 20px;
+            color: #333;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 14px;
+        }
+
+        thead {
+            background: #f5f5f5;
+            border-bottom: 2px solid #ddd;
+        }
+
+        th {
+            padding: 12px;
+            text-align: left;
+            font-weight: 600;
+            color: #333;
+        }
+
+        td {
+            padding: 10px 12px;
+            border-bottom: 1px solid #eee;
+            color: #666;
+        }
+
+        tr:hover {
+            background: #fafafa;
+        }
+
+        tr:nth-child(even) {
+            background: #f9f9f9;
+        }
+
+        .status-badge {
+            display: inline-block;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 12px;
+            font-weight: 600;
+        }
+
+        .status-confirmado {
+            background: #d4edda;
+            color: #155724;
+        }
+
+        .status-pendente {
+            background: #fff3cd;
+            color: #856404;
+        }
+
+        .status-cancelado {
+            background: #f8d7da;
+            color: #721c24;
+        }
+
+        .pagination {
+            display: flex;
+            justify-content: center;
+            gap: 10px;
+            margin-top: 15px;
+        }
+
+        .pagination button {
+            padding: 8px 12px;
+            background: #f0f0f0;
+            color: #333;
+        }
+
+        .pagination button.active {
+            background: #667eea;
+            color: white;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>📊 Dashboard Analítico de Agendamentos</h1>
+            <p>Análise de agendamentos por período, convênio, unidade e especialidade</p>
+            
+            <div class="filters">
+                <div class="filter-group">
+                    <label for="period">Período</label>
+                    <select id="period" onchange="updateDateInputs()">
+                        <option value="day">Dia</option>
+                        <option value="week">Semana</option>
+                        <option value="month" selected>Mês</option>
+                        <option value="custom">Customizado</option>
+                    </select>
+                </div>
+
+                <div class="filter-group">
+                    <label for="unit">Unidade</label>
+                    <select id="unit">
+                        <option value="">Todas</option>
+                    </select>
+                </div>
+
+                <div class="filter-group">
+                    <label for="insurance">Convênio</label>
+                    <select id="insurance">
+                        <option value="">Todos</option>
+                    </select>
+                </div>
+
+                <div class="filter-group">
+                    <label for="specialty">Especialidade</label>
+                    <select id="specialty">
+                        <option value="">Todas</option>
+                    </select>
+                </div>
+
+                <div class="filter-group">
+                    <label for="minAge">Idade mínima</label>
+                    <input type="number" id="minAge" min="0" placeholder="0">
+                </div>
+
+                <div class="filter-group">
+                    <label for="maxAge">Idade máxima</label>
+                    <input type="number" id="maxAge" min="0" placeholder="100">
+                </div>
+
+                <div class="filter-group" id="startDateGroup" style="display: none;">
+                    <label for="startDate">Data Inicial</label>
+                    <input type="date" id="startDate">
+                </div>
+
+                <div class="filter-group" id="endDateGroup" style="display: none;">
+                    <label for="endDate">Data Final</label>
+                    <input type="date" id="endDate">
+                </div>
+            </div>
+
+            <div class="btn-group">
+                <button onclick="loadDashboard()">🔄 Carregar Dashboard</button>
+                <button class="secondary" onclick="clearFilters()">✕ Limpar Filtros</button>
+            </div>
+        </header>
+
+        <div id="message"></div>
+        <div id="summary"></div>
+        <div class="dashboard" id="dashboard">
+            <div class="loading">Carregando dashboard...</div>
+        </div>
+
+        <div class="table-container">
+            <h2>👥 Detalhes de Agendamentos por Paciente</h2>
+            <table id="appointmentsTable">
+                <thead>
+                    <tr>
+                        <th>Paciente</th>
+                        <th>Idade</th>
+                        <th>Unidade</th>
+                        <th>Data Agendamento</th>
+                        <th>Especialidade</th>
+                        <th>Convênio</th>
+                        <th>Status</th>
+                    </tr>
+                </thead>
+                <tbody id="tableBody">
+                    <tr>
+                        <td colspan="7" style="text-align: center; color: #999;">Carregando agendamentos...</td>
+                    </tr>
+                </tbody>
+            </table>
+            <div style="display:flex;gap:10px;align-items:center;margin:10px 0;">
+                <button onclick="downloadCSV()">⬇️ Baixar XLSX (filtrado)</button>
+                <label style="font-weight:600;">Mostrar:</label>
+                <select id="pageSizeSelect" onchange="changePageSize()">
+                    <option value="10">10</option>
+                    <option value="25">25</option>
+                    <option value="50">50</option>
+                    <option value="100">100</option>
+                </select>
+            </div>
+            <div class="pagination" id="pagination"></div>
+        </div>
+    </div>
+
+    <script>
+        const API_BASE = 'http://localhost:3000/api';
+        let allAppointments = [];
+        let currentPage = 1;
+        let itemsPerPage = 10;
+
+        // Inicializar página
+        async function init() {
+            await loadUnits();
+            await loadInsurances();
+            await loadSpecialties();
+            await loadDashboard();
+            await loadAppointmentsTable();
+        }
+
+        // Atualizar inputs de data customizados
+        function updateDateInputs() {
+            const period = document.getElementById('period').value;
+            const startDateGroup = document.getElementById('startDateGroup');
+            const endDateGroup = document.getElementById('endDateGroup');
+            
+            if (period === 'custom') {
+                startDateGroup.style.display = 'flex';
+                endDateGroup.style.display = 'flex';
+            } else {
+                startDateGroup.style.display = 'none';
+                endDateGroup.style.display = 'none';
+            }
+        }
+
+        // Carregar lista de unidades com nomes
+        async function loadUnits() {
+            try {
+                const response = await fetch(`${API_BASE}/data/units`);
+                const units = await response.json();
+                const select = document.getElementById('unit');
+                
+                // Limpar opções anteriores
+                select.innerHTML = '<option value="">Todas</option>';
+                
+                units.forEach(unit => {
+                    const option = document.createElement('option');
+                    option.value = unit.id;
+                    option.textContent = unit.nome || unit.id;
+                    select.appendChild(option);
+                });
+            } catch (error) {
+                console.error('Erro ao carregar unidades:', error);
+            }
+        }
+
+        // Carregar lista de convênios com nomes
+        async function loadInsurances() {
+            try {
+                const response = await fetch(`${API_BASE}/data/insurances`);
+                const insurances = await response.json();
+                const select = document.getElementById('insurance');
+                
+                // Limpar opções anteriores
+                select.innerHTML = '<option value="">Todos</option>';
+                
+                insurances.forEach(insurance => {
+                    const option = document.createElement('option');
+                    option.value = insurance.id;
+                    option.textContent = insurance.nome || insurance.id;
+                    select.appendChild(option);
+                });
+            } catch (error) {
+                console.error('Erro ao carregar convênios:', error);
+            }
+        }
+
+        // Carregar lista de especialidades
+        async function loadSpecialties() {
+            try {
+                const response = await fetch(`${API_BASE}/appointments?period=month`);
+                const data = await response.json();
+                
+                const specialties = [...new Set(data.data.map(apt => apt.modalidade).filter(s => s))];
+                const select = document.getElementById('specialty');
+                
+                specialties.forEach(specialty => {
+                    const option = document.createElement('option');
+                    option.value = specialty;
+                    option.textContent = specialty;
+                    select.appendChild(option);
+                });
+            } catch (error) {
+                console.error('Erro ao carregar especialidades:', error);
+            }
+        }
+
+        // Construir query string
+        function getQueryString() {
+            const period = document.getElementById('period').value;
+            const unit = document.getElementById('unit').value;
+            const insurance = document.getElementById('insurance').value;
+            const specialty = document.getElementById('specialty').value;
+            const startDate = document.getElementById('startDate').value;
+            const endDate = document.getElementById('endDate').value;
+            const minAge = document.getElementById('minAge').value;
+            const maxAge = document.getElementById('maxAge').value;
+
+            let query = `period=${period}`;
+            if (unit) query += `&unitId=${unit}`;
+            if (insurance) query += `&insurance=${insurance}`;
+            if (specialty) query += `&specialty=${specialty}`;
+            if (startDate) query += `&startDate=${startDate}`;
+            if (endDate) query += `&endDate=${endDate}`;
+            if (minAge) query += `&minAge=${minAge}`;
+            if (maxAge) query += `&maxAge=${maxAge}`;
+
+            return query;
+        }
+
+        // Carregar dashboard
+        async function loadDashboard() {
+            try {
+                const query = getQueryString();
+                const response = await fetch(`${API_BASE}/analytics/dashboard?${query}`);
+                const result = await response.json();
+
+                if (result.success) {
+                    await renderDashboard(result.data, query);
+                    clearMessage();
+                } else {
+                    showError(result.error);
+                }
+            } catch (error) {
+                showError('Erro ao carregar dashboard: ' + error.message);
+            }
+        }
+
+        // Carregar tabela de agendamentos com nomes
+        async function loadAppointmentsTable() {
+            try {
+                const query = getQueryString();
+                const response = await fetch(`${API_BASE}/data/appointments?${query}`);
+                const data = await response.json();
+                allAppointments = Array.isArray(data) ? data : (data.data || data);
+                currentPage = 1;
+                renderAppointmentsTable();
+            } catch (error) {
+                console.error('Erro ao carregar agendamentos:', error);
+                document.getElementById('tableBody').innerHTML = `<tr><td colspan="7" style="text-align: center; color: #c33;">Erro ao carregar agendamentos</td></tr>`;
+            }
+        }
+
+        // Renderizar tabela de agendamentos
+        function renderAppointmentsTable() {
+            const start = (currentPage - 1) * itemsPerPage;
+            const end = start + itemsPerPage;
+            const paginatedData = allAppointments.slice(start, end);
+
+            let html = '';
+            if (paginatedData.length === 0) {
+                html = '<tr><td colspan="7" style="text-align: center; color: #999;">Nenhum agendamento encontrado</td></tr>';
+            } else {
+                html = paginatedData.map(apt => `
+                    <tr>
+                        <td>${apt.paciente_nome || 'N/A'}</td>
+                        <td>${apt.paciente_age != null ? apt.paciente_age : ''}</td>
+                        <td>${apt.unidade_nome || 'N/A'}</td>
+                        <td>${formatDate(apt.data_agendamento)}</td>
+                        <td>${apt.modalidade || 'N/A'}</td>
+                        <td>${apt.convenio_nome || 'N/A'}</td>
+                        <td>
+                            <span class="status-badge status-${(apt.status||'pendente').toLowerCase()}">
+                                ${apt.status || 'Pendente'}
+                            </span>
+                        </td>
+                    </tr>
+                `).join('');
+            }
+
+            document.getElementById('tableBody').innerHTML = html;
+
+            // Simplified pagination: Prev / Next + range + page size
+            const totalItems = allAppointments.length;
+            const totalPages = Math.max(1, Math.ceil(totalItems / itemsPerPage));
+            if (currentPage > totalPages) currentPage = totalPages;
+
+            const from = totalItems === 0 ? 0 : start + 1;
+            const to = Math.min(end, totalItems);
+
+            let paginationHtml = '';
+            paginationHtml += `<button onclick="prevPage()">Anterior</button>`;
+            paginationHtml += `<div style="padding:8px 12px;background:transparent;">${from} - ${to} de ${totalItems}</div>`;
+            paginationHtml += `<button onclick="nextPage()">Próximo</button>`;
+
+            document.getElementById('pagination').innerHTML = paginationHtml;
+        }
+
+        function prevPage() {
+            if (currentPage > 1) { currentPage--; renderAppointmentsTable(); }
+        }
+
+        function nextPage() {
+            const totalPages = Math.ceil(allAppointments.length / itemsPerPage);
+            if (currentPage < totalPages) { currentPage++; renderAppointmentsTable(); }
+        }
+
+        // Formatar data
+        function formatDate(dateString) {
+            const date = new Date(dateString);
+            return date.toLocaleDateString('pt-BR');
+        }
+
+        // Renderizar dashboard
+        async function renderDashboard(data, query) {
+            const { summary, specialtyDistribution, insuranceDistribution, unitDistribution, ageDistribution } = data;
+
+            // Renderizar summary
+            const summaryHtml = `
+                <div class="summary-grid">
+                    <div class="summary-item">
+                        <div class="label">Total de Agendamentos</div>
+                        <div class="value">${summary.totalAppointments}</div>
+                    </div>
+                    <div class="summary-item">
+                        <div class="label">Média por Dia</div>
+                        <div class="value">${summary.averageAppointmentsPerDay}</div>
+                    </div>
+                    <div class="summary-item">
+                        <div class="label">Período</div>
+                        <div class="value">${summary.period}</div>
+                    </div>
+                </div>
+            `;
+            document.getElementById('summary').innerHTML = summaryHtml;
+
+            // Renderizar gráficos
+            let dashboard = `
+                <div class="card">
+                    <h2>📋 Agendamentos por Especialidade</h2>
+                    <div class="chart-container">
+                        <canvas id="specialtyChart"></canvas>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <h2>🏥 Agendamentos por Convênio</h2>
+                    <div class="chart-container">
+                        <canvas id="insuranceChart"></canvas>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <h2>🏢 Agendamentos por Unidade</h2>
+                    <div class="chart-container">
+                        <canvas id="unitChart"></canvas>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <h2>🎂 Faixa Etária &lt;18 / ≥18</h2>
+                    <div class="chart-container">
+                        <canvas id="ageChart"></canvas>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <h2>🕒 Agendamentos por Horário × Terapia</h2>
+                    <div style="display:flex;gap:10px;align-items:center;margin-bottom:8px;">
+                        <label style="font-weight:600;">Intervalo:</label>
+                        <select id="scheduleSlotSelect" onchange="changeScheduleSlot()">
+                            <option value="15">15 minutos</option>
+                            <option value="30">30 minutos</option>
+                            <option value="60" selected>60 minutos</option>
+                        </select>
+                    </div>
+                    <div class="chart-container">
+                        <canvas id="scheduleChart"></canvas>
+                    </div>
+                </div>
+            `;
+
+            document.getElementById('dashboard').innerHTML = dashboard;
+
+            // Criar gráficos
+            createChart('specialtyChart', 'bar', specialtyDistribution.labels, specialtyDistribution.data, 'Especialidades');
+            createChart('insuranceChart', 'doughnut', insuranceDistribution.labels, insuranceDistribution.data, 'Convênios');
+            // Unidade: mostrar ícone de clínica + nome e barras horizontais com rótulos de dados
+            createHorizontalBarWithLabels('unitChart', unitDistribution.labels, unitDistribution.data, 'Unidades');
+
+            // Age chart: if backend provided, use it; otherwise try to compute from appointments
+            if (ageDistribution && ageDistribution.data && ageDistribution.data.length) {
+                createChart('ageChart', 'doughnut', ageDistribution.labels, ageDistribution.data, 'Faixa Etária');
+            } else {
+                try {
+                    const resp = await fetch(`${API_BASE}/data/appointments?${query}`);
+                    const apts = await resp.json();
+                    const appointmentsArray = Array.isArray(apts) ? apts : (apts.data || apts);
+                    const buckets = { '<18':0, '18-30':0, '31-45':0, '46-60':0, '61+':0, 'Sem idade':0 };
+                    appointmentsArray.forEach(apt => {
+                        const age = apt.paciente_age;
+                        if (age === null || age === undefined) buckets['Sem idade']++;
+                        else if (age < 18) buckets['<18']++;
+                        else if (age <= 30) buckets['18-30']++;
+                        else if (age <= 45) buckets['31-45']++;
+                        else if (age <= 60) buckets['46-60']++;
+                        else buckets['61+']++;
+                    });
+                    createChart('ageChart', 'doughnut', Object.keys(buckets), Object.values(buckets), 'Faixa Etária');
+                } catch (e) {
+                    console.warn('Não foi possível gerar gráfico de idade localmente', e);
+                }
+            }
+
+            // Trend chart (current vs previous period)
+            await renderTrendChart(query);
+
+            // Schedule chart: fetch appointments (normalized) and render schedule by time x therapy
+            try {
+                const resp = await fetch(`${API_BASE}/data/appointments?${query}`);
+                const apts = await resp.json();
+                const appointmentsArray = Array.isArray(apts) ? apts : (apts.data || apts);
+                // save for re-render when slot size changes
+                window._lastScheduleAppointments = appointmentsArray;
+                const slot = Number(document.getElementById('scheduleSlotSelect')?.value || 60);
+                createScheduleChart('scheduleChart', appointmentsArray, slot);
+            } catch (e) {
+                console.warn('Não foi possível gerar gráfico de horário localmente', e);
+            }
+        }
+
+        // Criar gráfico de barras horizontais com labels (ícone e valor + % ao final das barras)
+        function createHorizontalBarWithLabels(canvasId, labels, data, label) {
+            const canvas = document.getElementById(canvasId);
+            if (window.charts && window.charts[canvasId]) {
+                window.charts[canvasId].destroy();
+            }
+            if (!window.charts) window.charts = {};
+
+            const colors = [
+                '#667eea', '#764ba2', '#f093fb', '#4facfe', '#00f2fe',
+                '#43e97b', '#fa709a', '#fee140', '#30cfd0', '#330867'
+            ];
+
+            const prefLabels = labels;
+
+            window.charts[canvasId] = new Chart(canvas, {
+                type: 'bar',
+                data: {
+                    labels: prefLabels,
+                    datasets: [{
+                        label: label,
+                        data: data,
+                        backgroundColor: colors.slice(0, labels.length),
+                        borderColor: '#fff',
+                        borderWidth: 1
+                    }]
+                },
+                options: {
+                    indexAxis: 'y',
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    layout: {
+                        padding: { left: 120 }
+                    },
+                    plugins: {
+                        legend: { display: false },
+                        tooltip: {
+                            callbacks: {
+                                label: function(context) {
+                                    const value = context.raw || 0;
+                                    const dataArr = context.dataset.data || [];
+                                    const total = dataArr.reduce((a,b)=>a+(Number(b)||0),0);
+                                    const pct = total ? ((value/total)*100).toFixed(1) + '%' : '0%';
+                                    return `${context.dataset.label || ''}: ${value} (${pct})`;
+                                }
+                            }
+                        }
+                    },
+                    scales: {
+                        x: { beginAtZero: true },
+                        // hide default y ticks; we'll draw labels + icon manually to ensure perfect alignment
+                        y: { ticks: { display: false, autoSkip: false, padding: 10 }, grid: { display: false } }
+                    }
+                },
+                plugins: [
+                    {
+                        id: 'drawIcons',
+                        afterDraw(chart) {
+                            const {ctx, chartArea} = chart;
+                            const labels = chart.data.labels || [];
+                            ctx.save();
+                            ctx.font = '16px "Segoe UI", Arial, sans-serif';
+                            ctx.textBaseline = 'middle';
+                            ctx.fillStyle = '#333';
+                            const meta = chart.getDatasetMeta(0);
+                            // positions: icon at iconX, name at nameX (both inside the reserved left padding)
+                            const iconX = chartArea.left - 96; // further left inside reserved area
+                            const nameX = chartArea.left - 64; // label text start
+                            meta.data.forEach((bar, i) => {
+                                const y = bar.y;
+                                // draw icon
+                                ctx.fillText('🏥', iconX, y);
+                                // draw unit name with wrapping
+                                const text = String(labels[i] || '');
+                                ctx.font = '13px "Segoe UI", Arial, sans-serif';
+                                const maxWidth = Math.max(40, chartArea.left - nameX - 12);
+
+                                // wrap text into lines
+                                const words = text.split(/\s+/);
+                                const lines = [];
+                                let current = '';
+                                for (let w of words) {
+                                    const test = current ? (current + ' ' + w) : w;
+                                    const width = ctx.measureText(test).width;
+                                    if (width <= maxWidth) {
+                                        current = test;
+                                    } else {
+                                        if (current) lines.push(current);
+                                        current = w;
+                                    }
+                                }
+                                if (current) lines.push(current);
+
+                                const lineHeight = 14;
+                                const totalHeight = lines.length * lineHeight;
+                                // start drawing so the block is vertically centered at bar.y
+                                let startY = y - totalHeight/2 + lineHeight/2;
+                                for (let li = 0; li < lines.length; li++) {
+                                    ctx.fillText(lines[li], nameX, startY + li*lineHeight);
+                                }
+                            });
+                            ctx.restore();
+                        }
+                    },
+                    {
+                        id: 'barValueLabels',
+                        afterDatasetsDraw(chart) {
+                            const {ctx, data} = chart;
+                            const dataset = data.datasets[0];
+                            const total = dataset.data.reduce((a,b)=>a+(Number(b)||0),0);
+                            ctx.save();
+                            chart.getDatasetMeta(0).data.forEach((bar, i) => {
+                                const val = dataset.data[i] || 0;
+                                const pct = total ? ((val/total)*100).toFixed(1) + '%' : '0%';
+                                const x = bar.x + 8;
+                                const y = bar.y;
+                                ctx.fillStyle = '#333';
+                                ctx.font = '12px "Segoe UI", Arial, sans-serif';
+                                ctx.textBaseline = 'middle';
+                                ctx.fillText(`${val} (${pct})`, x, y);
+                            });
+                            ctx.restore();
+                        }
+                    }
+                ]
+            });
+        }
+
+        // Criar gráfico com Chart.js
+        function createChart(canvasId, type, labels, data, label) {
+            const canvas = document.getElementById(canvasId);
+            if (window.charts && window.charts[canvasId]) {
+                window.charts[canvasId].destroy();
+            }
+
+            if (!window.charts) window.charts = {};
+
+            const colors = [
+                '#667eea', '#764ba2', '#f093fb', '#4facfe', '#00f2fe',
+                '#43e97b', '#fa709a', '#fee140', '#30cfd0', '#330867'
+            ];
+
+            window.charts[canvasId] = new Chart(canvas, {
+                type: type,
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        label: label,
+                        data: data,
+                        backgroundColor: colors.slice(0, labels.length),
+                        borderColor: '#fff',
+                        borderWidth: 2,
+                        tension: 0.3
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            position: 'bottom',
+                            labels: {
+                                padding: 15,
+                                font: { size: 12 }
+                            }
+                        },
+                        tooltip: {
+                            callbacks: {
+                                label: function(context) {
+                                    const value = context.raw || 0;
+                                    const dataArr = context.chart.data.datasets[0].data || [];
+                                    const total = dataArr.reduce((a,b)=>a+(Number(b)||0),0);
+                                    const pct = total ? ((value/total)*100).toFixed(1) + '%' : '0%';
+                                    return `${context.label || ''}: ${value} (${pct})`;
+                                }
+                            }
+                        }
+                    },
+                    scales: type === 'bar' ? {
+                        y: {
+                            beginAtZero: true,
+                            ticks: { stepSize: 1 }
+                        }
+                    } : {}
+                }
+            });
+        }
+
+        // Criar gráfico de agendamento por horário x terapia (barras empilhadas)
+        function createScheduleChart(canvasId, appointments, slotMinutes = 60) {
+            const canvas = document.getElementById(canvasId);
+            if (!canvas) return;
+            if (window.charts && window.charts[canvasId]) window.charts[canvasId].destroy();
+            window.charts = window.charts || {};
+
+            // build time slots labels (00:00 ... 23:xx)
+            const slots = [];
+            for (let m = 0; m < 24*60; m += slotMinutes) {
+                const hh = String(Math.floor(m/60)).padStart(2,'0');
+                const mm = String(m%60).padStart(2,'0');
+                slots.push(`${hh}:${mm}`);
+            }
+
+            // modalities
+            const modalities = [...new Set(appointments.map(a => (a.modalidade||'Sem Terapia')))].slice(0);
+            const colors = ['#667eea', '#764ba2', '#f093fb', '#4facfe', '#00f2fe', '#43e97b', '#fa709a', '#fee140', '#30cfd0', '#330867'];
+
+            // init data matrix
+            const matrix = {};
+            modalities.forEach(m => { matrix[m] = new Array(slots.length).fill(0); });
+
+            appointments.forEach(a => {
+                // usar horario_inicio se disponível, caso contrário extrair da data_agendamento
+                let minutes = 0;
+                if (a.horario_inicio) {
+                    // horario_inicio é string formato HH:MM
+                    const [hh, mm] = a.horario_inicio.split(':').map(Number);
+                    minutes = (hh || 0) * 60 + (mm || 0);
+                } else {
+                    // fallback: extrair da data_agendamento
+                    const dt = new Date(a.data_agendamento);
+                    if (isNaN(dt)) return;
+                    minutes = dt.getHours()*60 + dt.getMinutes();
+                }
+                const idx = Math.floor(minutes / slotMinutes);
+                if (idx < 0 || idx >= slots.length) return; // skip invalid slots
+                const mod = a.modalidade || 'Sem Terapia';
+                if (!matrix[mod]) { matrix[mod] = new Array(slots.length).fill(0); modalities.push(mod); }
+                matrix[mod][idx] = (matrix[mod][idx] || 0) + 1;
+            });
+
+            // compute slot totals for percent
+            const slotTotals = new Array(slots.length).fill(0);
+            for (let i=0;i<slots.length;i++) {
+                modalities.forEach(m => { slotTotals[i] += (matrix[m][i]||0); });
+            }
+
+            const datasets = modalities.map((m, i) => ({
+                label: m,
+                data: matrix[m],
+                backgroundColor: colors[i % colors.length]
+            }));
+
+            window.charts[canvasId] = new Chart(canvas, {
+                type: 'bar',
+                data: { labels: slots, datasets },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: { legend: { position: 'bottom' }, tooltip: {
+                        callbacks: { label: function(ctx) {
+                            const v = ctx.raw || 0;
+                            const i = ctx.dataIndex;
+                            const pct = slotTotals[i] ? ((v/slotTotals[i])*100).toFixed(1)+'%' : '0%';
+                            return `${ctx.dataset.label}: ${v} (${pct})`;
+                        } }
+                    } },
+                    scales: { x: { stacked: true }, y: { stacked: true, beginAtZero: true } }
+                }
+            });
+        }
+
+        // Limpar filtros
+        function clearFilters() {
+            document.getElementById('period').value = 'month';
+            document.getElementById('unit').value = '';
+            document.getElementById('insurance').value = '';
+            document.getElementById('specialty').value = '';
+            document.getElementById('startDate').value = '';
+            document.getElementById('endDate').value = '';
+            updateDateInputs();
+            loadDashboard();
+            loadAppointmentsTable();
+        }
+
+        function changeScheduleSlot() {
+            const slot = Number(document.getElementById('scheduleSlotSelect').value || 60);
+            if (window._lastScheduleAppointments) createScheduleChart('scheduleChart', window._lastScheduleAppointments, slot);
+        }
+
+        // Mostrar mensagem de erro
+        function showError(message) {
+            document.getElementById('message').innerHTML = `<div class="error">❌ ${message}</div>`;
+        }
+
+        // Mostrar mensagem de sucesso
+        function showSuccess(message) {
+            document.getElementById('message').innerHTML = `<div class="success">✅ ${message}</div>`;
+        }
+
+        // Limpar mensagens
+        function clearMessage() {
+            document.getElementById('message').innerHTML = '';
+        }
+
+        // Alterar tamanho da página
+        function changePageSize() {
+            const sel = document.getElementById('pageSizeSelect');
+            const v = Number(sel.value) || 10;
+            itemsPerPage = v;
+            currentPage = 1;
+            renderAppointmentsTable();
+        }
+
+        // Baixar CSV dos dados filtrados (tabela completa)
+        function downloadCSV() {
+            if (!allAppointments || !allAppointments.length) {
+                showError('Nenhum dado para download');
+                return;
+            }
+            const keys = ['paciente_nome','paciente_age','unidade_nome','data_agendamento','horario_inicio','modalidade','convenio_nome','status'];
+            const header = ['Paciente','Idade','Unidade','Data Agendamento','Horário Início','Especialidade','Convênio','Status'];
+            
+            // Preparar dados para Excel
+            const data = allAppointments.map(a => {
+                return {
+                    'Paciente': a.paciente_nome || 'N/A',
+                    'Idade': a.paciente_age ?? '',
+                    'Unidade': a.unidade_nome || 'N/A',
+                    'Data Agendamento': a.data_agendamento ? new Date(a.data_agendamento).toLocaleDateString('pt-BR') : '',
+                    'Horário Início': a.horario_inicio || '',
+                    'Especialidade': a.modalidade || 'N/A',
+                    'Convênio': a.convenio_nome || 'N/A',
+                    'Status': a.status || 'Pendente'
+                };
+            });
+
+            // Criar workbook e worksheet
+            const ws = XLSX.utils.json_to_sheet(data);
+            const wb = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(wb, ws, 'Agendamentos');
+
+            // Ajustar largura das colunas
+            const colWidths = [25, 10, 20, 18, 15, 20, 20, 15];
+            ws['!cols'] = colWidths.map(w => ({ wch: w }));
+
+            // Download
+            XLSX.writeFile(wb, `agendamentos_filtrados_${new Date().toISOString().slice(0,10)}.xlsx`);
+            showSuccess('Arquivo baixado com sucesso!');
+        }
+
+        // --- Trend chart renderer will be appended here by renderDashboard ---
+
+        async function renderTrendChart(query) {
+            const period = document.getElementById('period').value;
+            const now = new Date();
+            let curStart, curEnd, prevStart, prevEnd;
+            if (period === 'week') {
+                const day = now.getDay();
+                const diffToMon = (day + 6) % 7;
+                curStart = new Date(now); curStart.setDate(now.getDate() - diffToMon); curStart.setHours(0,0,0,0);
+                curEnd = new Date(curStart); curEnd.setDate(curStart.getDate() + 6); curEnd.setHours(23,59,59,999);
+                prevStart = new Date(curStart); prevStart.setDate(curStart.getDate() - 7); prevStart.setHours(0,0,0,0);
+                prevEnd = new Date(prevStart); prevEnd.setDate(prevStart.getDate() + 6); prevEnd.setHours(23,59,59,999);
+            } else if (period === 'month') {
+                curStart = new Date(now.getFullYear(), now.getMonth(), 1); curStart.setHours(0,0,0,0);
+                curEnd = new Date(now.getFullYear(), now.getMonth()+1, 0); curEnd.setHours(23,59,59,999);
+                prevStart = new Date(now.getFullYear(), now.getMonth()-1, 1); prevStart.setHours(0,0,0,0);
+                prevEnd = new Date(now.getFullYear(), now.getMonth(), 0); prevEnd.setHours(23,59,59,999);
+            } else {
+                curStart = new Date(now); curStart.setHours(0,0,0,0);
+                curEnd = new Date(now); curEnd.setHours(23,59,59,999);
+                prevStart = new Date(curStart); prevStart.setDate(curStart.getDate() - 1); prevStart.setHours(0,0,0,0);
+                prevEnd = new Date(prevStart); prevEnd.setHours(23,59,59,999);
+            }
+
+            function iso(d){ return d.toISOString().slice(0,10); }
+            const curResp = await fetch(`${API_BASE}/data/appointments?${query}&startDate=${iso(curStart)}&endDate=${iso(curEnd)}`);
+            const prevResp = await fetch(`${API_BASE}/data/appointments?${query}&startDate=${iso(prevStart)}&endDate=${iso(prevEnd)}`);
+            const curRaw = await curResp.json();
+            const prevRaw = await prevResp.json();
+            const curArr = Array.isArray(curRaw) ? curRaw : (curRaw.data||curRaw);
+            const prevArr = Array.isArray(prevRaw) ? prevRaw : (prevRaw.data||prevRaw);
+
+            // labels = each day in current period
+            const labels = [];
+            const curCounts = [];
+            const prevCounts = [];
+            const curMap = {};
+            const prevMap = {};
+            for (let d = new Date(curStart); d <= curEnd; d.setDate(d.getDate()+1)) {
+                const k = iso(new Date(d)); labels.push(k); curMap[k]=0;
+            }
+            for (let d = new Date(prevStart); d <= prevEnd; d.setDate(d.getDate()+1)) { prevMap[iso(new Date(d))]=0; }
+
+            curArr.forEach(a => { const k = iso(new Date(a.data_agendamento)); if (curMap[k]!==undefined) curMap[k]++; });
+            prevArr.forEach(a => { const k = iso(new Date(a.data_agendamento)); if (prevMap[k]!==undefined) prevMap[k]++; });
+
+            labels.forEach(l => { curCounts.push(curMap[l]||0); const correspondingPrev = prevMap[l]!==undefined ? prevMap[l] : (prevMap[iso(new Date(new Date(l).setDate(new Date(l).getDate() - (labels.length))) )]||0); prevCounts.push(correspondingPrev||0); });
+
+            const curTotal = curCounts.reduce((a,b)=>a+b,0);
+            const prevTotal = prevCounts.reduce((a,b)=>a+b,0);
+            const pct = prevTotal===0 ? (curTotal===0?0:100) : ((curTotal-prevTotal)/prevTotal*100);
+
+            // add or update trend card
+            const dashboardEl = document.getElementById('dashboard');
+            if (!document.getElementById('trendChart')) {
+                dashboardEl.insertAdjacentHTML('beforeend', `\n<div class="card">\n<h2>📈 Tendência (${period}) — Variação: ${pct.toFixed(1)}%</h2>\n<div class="chart-container"><canvas id="trendChart"></canvas></div>\n</div>\n`);
+            } else {
+                const h2 = document.querySelector('#trendChart')?.closest('.card')?.querySelector('h2'); if (h2) h2.textContent = `📈 Tendência (${period}) — Variação: ${pct.toFixed(1)}%`;
+            }
+
+            if (window.charts && window.charts['trendChart']) window.charts['trendChart'].destroy();
+            window.charts = window.charts || {};
+            const ctx = document.getElementById('trendChart');
+            window.charts['trendChart'] = new Chart(ctx, {
+                type: 'line',
+                data: { labels, datasets: [ { label:'Período atual', data:curCounts, borderColor:'#667eea', backgroundColor:'rgba(102,126,234,0.2)', tension:0.2 }, { label:'Período anterior', data:prevCounts, borderColor:'#764ba2', backgroundColor:'rgba(118,75,162,0.15)', tension:0.2 } ] },
+                options: { responsive:true, maintainAspectRatio:false, plugins:{ legend:{ position:'bottom' } } }
+            });
+        }
+
+        // Recarregar gráficos e tabela ao mudar filtros
+        document.getElementById('period')?.addEventListener('change', () => { loadDashboard(); loadAppointmentsTable(); });
+        document.getElementById('scheduleSlotSelect')?.addEventListener('change', () => { const slot = Number(document.getElementById('scheduleSlotSelect').value||60); if(window._lastScheduleAppointments) createScheduleChart('scheduleChart', window._lastScheduleAppointments, slot); });
+        document.getElementById('unit')?.addEventListener('change', () => { loadDashboard(); loadAppointmentsTable(); });
+        document.getElementById('insurance')?.addEventListener('change', () => { loadDashboard(); loadAppointmentsTable(); });
+        document.getElementById('specialty')?.addEventListener('change', () => { loadDashboard(); loadAppointmentsTable(); });
+        document.getElementById('minAge')?.addEventListener('input', () => { loadDashboard(); loadAppointmentsTable(); });
+        document.getElementById('maxAge')?.addEventListener('input', () => { loadDashboard(); loadAppointmentsTable(); });
+
+        // Inicializar ao carregar página
+        init();
+    </script>
+</body>
+</html>

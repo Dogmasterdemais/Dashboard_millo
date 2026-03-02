@@ -1,0 +1,180 @@
+{
+  "dashboard_example": {
+    "description": "Exemplo de resposta do endpoint /api/analytics/dashboard",
+    "method": "GET",
+    "url": "http://localhost:3000/api/analytics/dashboard?period=month",
+    "response": {
+      "success": true,
+      "data": {
+        "summary": {
+          "totalAppointments": 145,
+          "averageAppointmentsPerDay": "4.68",
+          "period": "month"
+        },
+        "specialtyDistribution": {
+          "labels": [
+            "Cardiologia",
+            "Dermatologia",
+            "Pediatria",
+            "Oftalmologia",
+            "Odontologia"
+          ],
+          "data": [32, 28, 25, 35, 25],
+          "total": 145
+        },
+        "insuranceDistribution": {
+          "labels": [
+            "Unimed",
+            "Bradesco Saúde",
+            "Sulamerica",
+            "Particular"
+          ],
+          "data": [45, 38, 42, 20],
+          "total": 145
+        },
+        "ageGroupDistribution": {
+          "labels": [
+            "Menores de 18 anos",
+            "Maiores de 18 anos"
+          ],
+          "data": [32, 113],
+          "total": 145
+        }
+      }
+    }
+  },
+  "appointments_example": {
+    "description": "Exemplo de resposta do endpoint /api/appointments?period=day",
+    "method": "GET",
+    "url": "http://localhost:3000/api/appointments?period=day",
+    "response": {
+      "success": true,
+      "count": 8,
+      "data": [
+        {
+          "id": 1,
+          "appointment_date": "2024-01-15T08:00:00Z",
+          "patient_name": "João Silva",
+          "patient_birthdate": "1985-06-20",
+          "specialty": "Cardiologia",
+          "insurance": "Unimed",
+          "clinic_id": 1,
+          "created_at": "2024-01-15T07:30:00Z"
+        },
+        {
+          "id": 2,
+          "appointment_date": "2024-01-15T09:30:00Z",
+          "patient_name": "Maria Santos",
+          "patient_birthdate": "2010-03-15",
+          "specialty": "Pediatria",
+          "insurance": "Bradesco Saúde",
+          "clinic_id": 1,
+          "created_at": "2024-01-15T09:00:00Z"
+        },
+        {
+          "id": 3,
+          "appointment_date": "2024-01-15T14:00:00Z",
+          "patient_name": "Pedro Oliveira",
+          "patient_birthdate": "1972-11-05",
+          "specialty": "Cardiologia",
+          "insurance": "Sulamerica",
+          "clinic_id": 2,
+          "created_at": "2024-01-15T13:30:00Z"
+        }
+      ]
+    }
+  },
+  "specialty_distribution_example": {
+    "description": "Exemplo de resposta do endpoint /api/analytics/specialty-distribution",
+    "method": "GET",
+    "url": "http://localhost:3000/api/analytics/specialty-distribution?period=month",
+    "response": {
+      "success": true,
+      "data": {
+        "labels": [
+          "Cardiologia",
+          "Dermatologia",
+          "Pediatria",
+          "Oftalmologia",
+          "Odontologia"
+        ],
+        "data": [32, 28, 25, 35, 25],
+        "total": 145
+      }
+    }
+  },
+  "insurance_distribution_example": {
+    "description": "Exemplo de resposta do endpoint /api/analytics/insurance-distribution",
+    "method": "GET",
+    "url": "http://localhost:3000/api/analytics/insurance-distribution?period=month",
+    "response": {
+      "success": true,
+      "data": {
+        "labels": [
+          "Unimed",
+          "Bradesco Saúde",
+          "Sulamerica",
+          "Particular"
+        ],
+        "data": [45, 38, 42, 20],
+        "total": 145
+      }
+    }
+  },
+  "age_distribution_example": {
+    "description": "Exemplo de resposta do endpoint /api/analytics/age-distribution",
+    "method": "GET",
+    "url": "http://localhost:3000/api/analytics/age-distribution?period=month",
+    "response": {
+      "success": true,
+      "data": {
+        "labels": [
+          "Menores de 18 anos",
+          "Maiores de 18 anos"
+        ],
+        "data": [32, 113],
+        "total": 145
+      }
+    }
+  },
+  "filtered_appointments_example": {
+    "description": "Exemplo de resposta do endpoint /api/appointments/filtered com múltiplos filtros",
+    "method": "GET",
+    "url": "http://localhost:3000/api/appointments/filtered?period=month&ageGroup=over18&specialty=Cardiologia",
+    "response": {
+      "success": true,
+      "count": 28,
+      "data": [
+        {
+          "id": 1,
+          "appointment_date": "2024-01-02T08:00:00Z",
+          "patient_name": "João Silva",
+          "patient_birthdate": "1985-06-20",
+          "specialty": "Cardiologia",
+          "insurance": "Unimed",
+          "clinic_id": 1,
+          "created_at": "2024-01-02T07:30:00Z"
+        },
+        {
+          "id": 4,
+          "appointment_date": "2024-01-03T10:00:00Z",
+          "patient_name": "Ana Costa",
+          "patient_birthdate": "1960-02-14",
+          "specialty": "Cardiologia",
+          "insurance": "Sulamerica",
+          "clinic_id": 2,
+          "created_at": "2024-01-03T09:30:00Z"
+        }
+      ]
+    }
+  },
+  "error_example": {
+    "description": "Exemplo de resposta de erro",
+    "method": "GET",
+    "url": "http://localhost:3000/api/appointments?period=invalid",
+    "response": {
+      "success": false,
+      "error": "Período inválido"
+    }
+  }
+}
