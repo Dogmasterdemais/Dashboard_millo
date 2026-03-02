@@ -21,20 +21,28 @@ const getEndOfDay = () => {
   return formatDate(new Date(), 'end');
 };
 
-// Função auxiliar para obter data do início da semana
+// Função auxiliar para obter data do início da semana (segunda-feira)
 const getStartOfWeek = () => {
   const d = new Date();
-  const diff = d.getDate() - d.getDay();
-  d.setDate(diff);
-  return formatDate(d, 'start');
+  const dayOfWeek = d.getDay();
+  // Ajusta para segunda (1) como início da semana
+  const daysToSubtract = dayOfWeek === 0 ? 6 : dayOfWeek - 1;
+  // Usar milissegundos para evitar problemas com mudança de mês
+  const ms = 24 * 60 * 60 * 1000;
+  const startOfWeek = new Date(d.getTime() - (daysToSubtract * ms));
+  return formatDate(startOfWeek, 'start');
 };
 
-// Função auxiliar para obter data do fim da semana
+// Função auxiliar para obter data do fim da semana (domingo)
 const getEndOfWeek = () => {
   const d = new Date();
-  const diff = d.getDate() - d.getDay() + 6;
-  d.setDate(diff);
-  return formatDate(d, 'end');
+  const dayOfWeek = d.getDay();
+  // Ajusta para domingo como fim da semana
+  const daysToAdd = dayOfWeek === 0 ? 0 : 7 - dayOfWeek;
+  // Usar milissegundos para evitar problemas com mudança de mês
+  const ms = 24 * 60 * 60 * 1000;
+  const endOfWeek = new Date(d.getTime() + (daysToAdd * ms));
+  return formatDate(endOfWeek, 'end');
 };
 
 // Função auxiliar para obter data do início do mês
