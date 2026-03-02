@@ -721,7 +721,15 @@
     </div>
 
     <script>
-        const API_BASE = 'http://localhost:3000/api';
+        // determine API base dynamically so that deployed app can call same host
+        const API_BASE = (function(){
+            // if running from file:// or localhost, default to localhost:3000
+            if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
+                return 'http://localhost:3000/api';
+            }
+            // otherwise use same origin
+            return window.location.origin + '/api';
+        })();
         let allAppointments = [];
         let currentPage = 1;
         let itemsPerPage = 10;
