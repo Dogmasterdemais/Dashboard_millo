@@ -1,10 +1,94 @@
 const { supabase } = require('../config/supabase');
 
-// Obter agendamentos com joins para nomes reais e aplicação de filtros (idade, convênio, unidade, especialidade, período, etc.)
-const appointmentService = require('./appointmentService');
+// Caches para dados estáticos
+let unitsCache = null;
+let insuranceCache = null;
+let cacheTimestamps = {
+  units: null,
+  insurance: null
+};
+
+const CACHE_DURATION = 3600000; // 1 hora em milissegundos
+
+// Calculadora de idade a partir de data de nascimento
+const calculateAge = dob => {
+  if (!dob) return null;
+  const birth = new Date(dob);
+  const today = new Date();
+  let age = today.getFullYear() - birth.getFullYear();
+  const monthDiff = today.getMonth() - birth.getMonth();
+  if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birth.getDate())) {
+    age--;
+  }
+  return age;
+};
+
+// Função auxiliar para obter data no formato correto
+const formatDate = (date, type = 'start') => {
+  const d = new Date(date);
+  if (type === 'end') {
+    d.setHours(23, 59, 59, 999);
+  } else {
+    d.setHours(0, 0, 0, 0);
+  }
+  return d.toISOString().split('T')[0];
+};
+
+// Funções auxiliares para obter datas de período
+const getStartOfDay = () => formatDate(new Date(), 'start');
+const getEndOfDay = () => formatDate(new Date(), 'end');
+
+const getStartOfWeek = () => {
+  const d = new Date();
+  const dayOfWeek = d.getDay();
+  const daysToSubtract = dayOfWeek === 0 ? 6 : dayOfWeek - 1;
+  const ms = 24 * 60 * 60 * 1000;
+  const startOfWeek = new Date(d.getTime() - (daysToSubtract * ms));
+  return formatDate(startOfWeek, 'start');
+};
+
+const getEndOfWeek = () => {
+  const d = new Date();
+  const dayOfWeek = d.getDay();
+  const daysToAdd = dayOfWeek === 0 ? 0 : 7 - dayOfWeek;
+  const ms = 24 * 60 * 60 * 1000;
+  const endOfWeek = new Date(d.getTime() + (daysToAdd * ms));
+  return formatDate(endOfWeek, 'end');
+};
+
+const getStartOfMonth = () => {
+  const d = new Date(new Date().getFullYear(), new Date().getMonth(), 1);
+  return formatDate(d, 'start');
+};
+
+const getEndOfMonth = () => {
+  const d = new Date(new Date().getFullYear(), new Date().getMonth() + 1, 0);
+  return formatDate(d, 'end');
+};
+
+// Obter datas baseado no período
+const getDateRangeByPeriod = (period = 'day', startDate = null, endDate = null) => {
+  switch (period) {
+    case 'day':
+      return { dateStart: getStartOfDay(), dateEnd: getEndOfDay() };
+    case 'week':
+      return { dateStart: getStartOfWeek(), dateEnd: getEndOfWeek() };
+    case 'month':
+      return { dateStart: getStartOfMonth(), dateEnd: getEndOfMonth() };
+    case 'custom':
+      if (!startDate || !endDate) {
+        return { dateStart: getStartOfDay(), dateEnd: getEndOfDay() };
+      }
+      return {
+        dateStart: formatDate(new Date(startDate), 'start'),
+        dateEnd: formatDate(new Date(endDate), 'end')
+      };
+    default:
+      return { dateStart: getStartOfDay(), dateEnd: getEndOfDay() };
+  }
+};
 
 const getAppointmentsWithNames = async (filters = {}) => {
-  // suporte nativo a minAge/maxAge em appointmentService
   const {
     period = 'day',
     startDate = null,
@@ -17,70 +101,65 @@ const getAppointmentsWithNames = async (filters = {}) => {
     status = null
   } = filters;
 
-  // calculadora de idade a partir de data de nascimento
-  const calculateAge = dob => {
-    if (!dob) return null;
-    const birth = new Date(dob);
-    const diff = Date.now() - birth.getTime();
-    const ageDt = new Date(diff);
-    return Math.abs(ageDt.getUTCFullYear() - 1970);
-  };
-
   try {
-    // primeiro obter lista base utilizando as regras de filtro simples
-    const agendamentosBase = await appointmentService.getAppointmentsFiltered({
-      period,
-      startDate,
-      endDate,
-      insurance,
-      unitId,
-      specialty,
-      status,
-      minAge,
-      maxAge
-    });
+    const { dateStart, dateEnd } = getDateRangeByPeriod(period, startDate, endDate);
+    
+    // Construir query com JOINs - UMA ÚNICA CONSULTA em vez de 4
+    let query = supabase
+      .from('agendamentos')
+      .select(`
+        id,
+        data_agendamento,
+        horario_inicio,
+        horario_fim,
+        modalidade,
+        status,
+        paciente_id,
+        unidade_id,
+        convenio_id,
+        pacientes(id, nome, data_nascimento),
+        unidades(id, nome),
+        convenios(id, nome)
+      `)
+      .gte('data_agendamento', dateStart)
+      .lte('data_agendamento', dateEnd);
 
-    if (!agendamentosBase || agendamentosBase.length === 0) {
+    // Aplicar filtros diretamente no banco
+    if (insurance) {
+      query = query.eq('convenio_id', insurance);
+    }
+    if (unitId) {
+      query = query.eq('unidade_id', unitId);
+    }
+    if (specialty) {
+      query = query.eq('modalidade', specialty);
+    }
+    if (status) {
+      query = query.eq('status', status);
+    }
+
+    const { data: appointments, error } = await query;
+    if (error) throw error;
+
+    if (!appointments || appointments.length === 0) {
       return [];
     }
 
-    // ids únicos para fazer joins
-    const pacienteIds = [...new Set(agendamentosBase.map(a => a.paciente_id).filter(p => p))];
-    const unidadeIds = [...new Set(agendamentosBase.map(a => a.unidade_id).filter(u => u))];
-    const convenioIds = [...new Set(agendamentosBase.map(a => a.convenio_id).filter(c => c))];
+    // Mapear dados com relações
+    const formatted = appointments.map(apt => {
+      const paciente = apt.pacientes || {};
+      const unidade = apt.unidades || {};
+      const convenio = apt.convenios || {};
+      const age = paciente.data_nascimento ? calculateAge(paciente.data_nascimento) : null;
 
-    // buscar dados auxiliares
-    const pacientesMap = {}; // id -> { nome, dob }
-    const unidadesMap = {};
-    const conveniosMap = {};
+      // Aplicar filtro de idade em JavaScript (após trazer dados)
+      if (minAge !== null && age !== null && age < Number(minAge)) {
+        return null;
+      }
+      if (maxAge !== null && age !== null && age > Number(maxAge)) {
+        return null;
+      }
 
-    if (pacienteIds.length > 0) {
-      const { data: pacientes } = await supabase
-        .from('pacientes')
-        .select('id, nome, data_nascimento')
-        .in('id', pacienteIds);
-      pacientes?.forEach(p => { pacientesMap[p.id] = { nome: p.nome, dob: p.data_nascimento }; });
-    }
-
-    if (unidadeIds.length > 0) {
-      const { data: unidades } = await supabase
-        .from('unidades')
-        .select('id, nome')
-        .in('id', unidadeIds);
-      unidades?.forEach(u => { unidadesMap[u.id] = u.nome; });
-    }
-
-    if (convenioIds.length > 0) {
-      const { data: convenios } = await supabase
-        .from('convenios')
-        .select('id, nome')
-        .in('id', convenioIds);
-      convenios?.forEach(c => { conveniosMap[c.id] = c.nome; });
-    }
-
-    // formatar dados finais
-    const formatted = agendamentosBase.map(apt => {
-      const pat = pacientesMap[apt.paciente_id] || {};
       return {
         id: apt.id,
         data_agendamento: apt.data_agendamento,
@@ -88,15 +167,15 @@ const getAppointmentsWithNames = async (filters = {}) => {
         horario_fim: apt.horario_fim,
         modalidade: apt.modalidade,
         status: apt.status,
-        paciente_nome: pat.nome || 'Sem paciente',
-        paciente_age: calculateAge(pat.dob) || apt.paciente_age || null,
+        paciente_nome: paciente.nome || 'Sem paciente',
+        paciente_age: age,
         paciente_id: apt.paciente_id,
-        unidade_nome: unidadesMap[apt.unidade_id] || 'Sem unidade',
+        unidade_nome: unidade.nome || 'Sem unidade',
         unidade_id: apt.unidade_id,
-        convenio_nome: conveniosMap[apt.convenio_id] || 'Sem convênio',
+        convenio_nome: convenio.nome || 'Sem convênio',
         convenio_id: apt.convenio_id,
       };
-    });
+    }).filter(apt => apt !== null);
 
     return formatted;
   } catch (error) {
@@ -105,9 +184,17 @@ const getAppointmentsWithNames = async (filters = {}) => {
   }
 };
 
-// Obter lista de unidades com nomes
+// Obter lista de unidades com nomes com cache (dados estáticos)
 const getUnitsWithNames = async () => {
   try {
+    const now = Date.now();
+    
+    // Verificar cache
+    if (unitsCache && cacheTimestamps.units && (now - cacheTimestamps.units) < CACHE_DURATION) {
+      console.log('Unidades carregadas do cache');
+      return unitsCache;
+    }
+
     const { data, error } = await supabase
       .from('unidades')
       .select('id, nome')
@@ -115,16 +202,30 @@ const getUnitsWithNames = async () => {
       .order('nome');
 
     if (error) throw error;
-    return data || [];
+    
+    // Salvar em cache
+    unitsCache = data || [];
+    cacheTimestamps.units = now;
+    
+    return unitsCache;
   } catch (error) {
     console.error('Erro ao buscar unidades:', error);
-    throw error;
+    // Retornar cache mesmo se expirado, em caso de erro
+    return unitsCache || [];
   }
 };
 
-// Obter lista de convênios com nomes
+// Obter lista de convênios com nomes com cache (dados estáticos)
 const getInsurancesWithNames = async () => {
   try {
+    const now = Date.now();
+    
+    // Verificar cache
+    if (insuranceCache && cacheTimestamps.insurance && (now - cacheTimestamps.insurance) < CACHE_DURATION) {
+      console.log('Convênios carregados do cache');
+      return insuranceCache;
+    }
+
     const { data, error } = await supabase
       .from('convenios')
       .select('id, nome')
@@ -132,15 +233,30 @@ const getInsurancesWithNames = async () => {
       .order('nome');
 
     if (error) throw error;
-    return data || [];
+    
+    // Salvar em cache
+    insuranceCache = data || [];
+    cacheTimestamps.insurance = now;
+    
+    return insuranceCache;
   } catch (error) {
     console.error('Erro ao buscar convênios:', error);
-    throw error;
+    // Retornar cache mesmo se expirado, em caso de erro
+    return insuranceCache || [];
   }
+};
+
+// Função para limpar cache (útil para teste ou força refresco manual)
+const clearCache = () => {
+  unitsCache = null;
+  insuranceCache = null;
+  cacheTimestamps = { units: null, insurance: null };
 };
 
 module.exports = {
   getAppointmentsWithNames,
   getUnitsWithNames,
   getInsurancesWithNames,
+  clearCache,
+  calculateAge,
 };
