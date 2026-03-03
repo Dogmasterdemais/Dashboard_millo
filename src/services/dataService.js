@@ -104,27 +104,14 @@ const getAppointmentsWithNames = async (filters = {}) => {
   try {
     const { dateStart, dateEnd } = getDateRangeByPeriod(period, startDate, endDate);
     
-    // Construir query com JOINs - UMA ÚNICA CONSULTA em vez de 4
+    // Buscar agendamentos base com filtros
     let query = supabase
       .from('agendamentos')
-      .select(`
-        id,
-        data_agendamento,
-        horario_inicio,
-        horario_fim,
-        modalidade,
-        status,
-        paciente_id,
-        unidade_id,
-        convenio_id,
-        pacientes(id, nome, data_nascimento),
-        unidades(id, nome),
-        convenios(id, nome)
-      `)
+      .select('*')
       .gte('data_agendamento', dateStart)
       .lte('data_agendamento', dateEnd);
 
-    // Aplicar filtros diretamente no banco
+    // Aplicar filtros diretamente no banco para reduzir dados
     if (insurance) {
       query = query.eq('convenio_id', insurance);
     }
@@ -145,12 +132,43 @@ const getAppointmentsWithNames = async (filters = {}) => {
       return [];
     }
 
-    // Mapear dados com relações
+    // Extrair IDs únicos para consultas paralelas
+    const pacienteIds = [...new Set(appointments.map(a => a.paciente_id).filter(p => p))];
+    const unidadeIds = [...new Set(appointments.map(a => a.unidade_id).filter(u => u))];
+    const convenioIds = [...new Set(appointments.map(a => a.convenio_id).filter(c => c))];
+
+    // Fazer 3 consultas em PARALELO (não sequencialmente)
+    const [pacientesRes, unidadesRes, conveniosRes] = await Promise.all([
+      pacienteIds.length > 0 
+        ? supabase.from('pacientes').select('id, nome, data_nascimento').in('id', pacienteIds)
+        : Promise.resolve({ data: [] }),
+      unidadeIds.length > 0 
+        ? supabase.from('unidades').select('id, nome').in('id', unidadeIds)
+        : Promise.resolve({ data: [] }),
+      convenioIds.length > 0 
+        ? supabase.from('convenios').select('id, nome').in('id', convenioIds)
+        : Promise.resolve({ data: [] })
+    ]);
+
+    // Mapear dados para fácil acesso
+    const pacientesMap = {};
+    const unidadesMap = {};
+    const conveniosMap = {};
+
+    pacientesRes.data?.forEach(p => {
+      pacientesMap[p.id] = { nome: p.nome, dob: p.data_nascimento };
+    });
+    unidadesRes.data?.forEach(u => {
+      unidadesMap[u.id] = u.nome;
+    });
+    conveniosRes.data?.forEach(c => {
+      conveniosMap[c.id] = c.nome;
+    });
+
+    // Formatar resultado final
     const formatted = appointments.map(apt => {
-      const paciente = apt.pacientes || {};
-      const unidade = apt.unidades || {};
-      const convenio = apt.convenios || {};
-      const age = paciente.data_nascimento ? calculateAge(paciente.data_nascimento) : null;
+      const paciente = pacientesMap[apt.paciente_id] || {};
+      const age = paciente.dob ? calculateAge(paciente.dob) : null;
 
       // Aplicar filtro de idade em JavaScript (após trazer dados)
       if (minAge !== null && age !== null && age < Number(minAge)) {
@@ -170,9 +188,9 @@ const getAppointmentsWithNames = async (filters = {}) => {
         paciente_nome: paciente.nome || 'Sem paciente',
         paciente_age: age,
         paciente_id: apt.paciente_id,
-        unidade_nome: unidade.nome || 'Sem unidade',
+        unidade_nome: unidadesMap[apt.unidade_id] || 'Sem unidade',
         unidade_id: apt.unidade_id,
-        convenio_nome: convenio.nome || 'Sem convênio',
+        convenio_nome: conveniosMap[apt.convenio_id] || 'Sem convênio',
         convenio_id: apt.convenio_id,
       };
     }).filter(apt => apt !== null);
