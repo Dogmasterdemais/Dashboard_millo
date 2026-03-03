@@ -166,6 +166,72 @@
             position: relative;
             height: clamp(250px, 60vw, 350px);
             width: 100%;
+            transition: opacity 0.2s;
+        }
+
+        .chart-container canvas {
+            cursor: pointer;
+            transition: filter 0.2s;
+        }
+
+        .chart-container:hover canvas {
+            filter: brightness(1.02);
+        }
+
+        .chart-hint {
+            font-size: 11px;
+            color: #999;
+            font-style: italic;
+            margin-bottom: 8px;
+            display: flex;
+            gap: 5px;
+            align-items: center;
+        }
+
+        .active-filters {
+            background: #f0f8ff;
+            border: 1px solid #667eea;
+            border-radius: 8px;
+            padding: 10px 12px;
+            margin-bottom: 12px;
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+            align-items: center;
+        }
+
+        .active-filters .filter-tag {
+            background: #667eea;
+            color: white;
+            padding: 4px 10px;
+            border-radius: 20px;
+            font-size: 12px;
+            display: flex;
+            gap: 6px;
+            align-items: center;
+        }
+
+        .active-filters .filter-tag button {
+            background: none;
+            border: none;
+            color: white;
+            cursor: pointer;
+            padding: 0;
+            min-height: auto;
+            min-width: auto;
+            font-size: 14px;
+            font-weight: bold;
+            opacity: 0.8;
+            transition: opacity 0.2s;
+        }
+
+        .active-filters .filter-tag button:hover {
+            opacity: 1;
+        }
+
+        .filtered-select {
+            border-color: #667eea !important;
+            background-color: #f0f8ff;
         }
 
         .summary {
@@ -674,6 +740,8 @@
                 </div>
             </div>
 
+            <div id="activeFiltersContainer"></div>
+
             <div class="btn-group">
                 <button onclick="loadDashboard()">🔄 Carregar Dashboard</button>
                 <button class="secondary" onclick="clearFilters()">✕ Limpar Filtros</button>
@@ -828,6 +896,7 @@
             await loadUnits();
             await loadInsurances();
             await loadSpecialties();
+            updateActiveFiltersIndicator();
             await loadDashboard();
             await loadAppointmentsTable();
         }
@@ -856,12 +925,15 @@
                 
                 // Limpar opções anteriores
                 select.innerHTML = '<option value="">Todas</option>';
+                window.labelToIdMap.unit = {}; // Resetar mapa
                 
                 units.forEach(unit => {
                     const option = document.createElement('option');
                     option.value = unit.id;
                     option.textContent = unit.nome || unit.id;
                     select.appendChild(option);
+                    // Construir mapa: nome do unit -> id
+                    window.labelToIdMap.unit[unit.nome || unit.id] = unit.id;
                 });
             } catch (error) {
                 console.error('Erro ao carregar unidades:', error);
@@ -877,12 +949,15 @@
                 
                 // Limpar opções anteriores
                 select.innerHTML = '<option value="">Todos</option>';
+                window.labelToIdMap.insurance = {}; // Resetar mapa
                 
                 insurances.forEach(insurance => {
                     const option = document.createElement('option');
                     option.value = insurance.id;
                     option.textContent = insurance.nome || insurance.id;
                     select.appendChild(option);
+                    // Construir mapa: nome do convênio -> id
+                    window.labelToIdMap.insurance[insurance.nome || insurance.id] = insurance.id;
                 });
             } catch (error) {
                 console.error('Erro ao carregar convênios:', error);
@@ -897,12 +972,15 @@
                 
                 const specialties = [...new Set(data.data.map(apt => apt.modalidade).filter(s => s))];
                 const select = document.getElementById('specialty');
+                window.labelToIdMap.specialty = {}; // Resetar mapa
                 
                 specialties.forEach(specialty => {
                     const option = document.createElement('option');
                     option.value = specialty;
                     option.textContent = specialty;
                     select.appendChild(option);
+                    // Para especialidade, o ID e o nome são iguais
+                    window.labelToIdMap.specialty[specialty] = specialty;
                 });
             } catch (error) {
                 console.error('Erro ao carregar especialidades:', error);
@@ -1057,21 +1135,30 @@
             // Renderizar gráficos
             let dashboard = `
                 <div class="card">
-                    <h2>📋 Agendamentos por Especialidade</h2>
+                    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
+                        <h2>📋 Agendamentos por Especialidade</h2>
+                        <small style="font-size:11px;color:#999;font-style:italic;">Clique para filtrar</small>
+                    </div>
                     <div class="chart-container">
                         <canvas id="specialtyChart"></canvas>
                     </div>
                 </div>
 
                 <div class="card">
-                    <h2>🏥 Agendamentos por Convênio</h2>
+                    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
+                        <h2>🏥 Agendamentos por Convênio</h2>
+                        <small style="font-size:11px;color:#999;font-style:italic;">Clique para filtrar</small>
+                    </div>
                     <div class="chart-container">
                         <canvas id="insuranceChart"></canvas>
                     </div>
                 </div>
 
                 <div class="card">
-                    <h2>🏢 Agendamentos por Unidade</h2>
+                    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
+                        <h2>🏢 Agendamentos por Unidade</h2>
+                        <small style="font-size:11px;color:#999;font-style:italic;">Clique para filtrar</small>
+                    </div>
                     <div class="chart-container">
                         <canvas id="unitChart"></canvas>
                     </div>
@@ -1149,7 +1236,7 @@
             }
         }
 
-        // Criar gráfico de barras horizontais com labels (ícone e valor + % ao final das barras)
+        // Criar gráfico de barras horizontais com labels (ícone e valor + % ao final das barras) com suporte a drill-down
         function createHorizontalBarWithLabels(canvasId, labels, data, label) {
             const canvas = document.getElementById(canvasId);
             if (window.charts && window.charts[canvasId]) {
@@ -1180,6 +1267,13 @@
                     indexAxis: 'y',
                     responsive: true,
                     maintainAspectRatio: false,
+                    onClick: function(event, elements) {
+                        if (elements && elements.length > 0) {
+                            const index = elements[0].index;
+                            const clickedLabel = labels[index];
+                            applyChartFilter(canvasId, clickedLabel);
+                        }
+                    },
                     layout: {
                         padding: { left: 120 }
                     },
@@ -1213,6 +1307,7 @@
                             ctx.font = '16px "Segoe UI", Arial, sans-serif';
                             ctx.textBaseline = 'middle';
                             ctx.fillStyle = '#333';
+                            ctx.cursor = 'pointer';
                             const meta = chart.getDatasetMeta(0);
                             // positions: icon at iconX, name at nameX (both inside the reserved left padding)
                             const iconX = chartArea.left - 96; // further left inside reserved area
@@ -1275,9 +1370,169 @@
                     }
                 ]
             });
+            
+            // Adicionar cursor pointer para indicar interatividade
+            canvas.style.cursor = 'pointer';
         }
 
-        // Criar gráfico com Chart.js
+        // Aplicar filtro ao clicar em um gráfico
+        // Mapas globais para armazenar labels e seus IDs correspondentes
+        window.labelToIdMap = {
+            specialty: {},
+            insurance: {},
+            unit: {}
+        };
+
+        function applyChartFilter(canvasId, label) {
+            if (!label) return;
+            
+            let selectedId = null;
+            
+            switch(canvasId) {
+                case 'specialtyChart': {
+                    selectedId = window.labelToIdMap.specialty[label] || 
+                                 Object.keys(window.labelToIdMap.specialty).find(key => 
+                                     key.toLowerCase() === String(label).toLowerCase()
+                                 );
+                    
+                    if (selectedId) {
+                        const finalId = window.labelToIdMap.specialty[selectedId] || selectedId;
+                        document.getElementById('specialty').value = finalId;
+                        showSuccess(`🎯 Filtrado por especialidade: ${label}`);
+                    } else {
+                        showError(`Especialidade não encontrada: ${label}`);
+                        return;
+                    }
+                    break;
+                }
+                case 'insuranceChart': {
+                    selectedId = window.labelToIdMap.insurance[label] || 
+                                 Object.keys(window.labelToIdMap.insurance).find(key => 
+                                     key.toLowerCase() === String(label).toLowerCase()
+                                 );
+                    
+                    if (selectedId) {
+                        const finalId = window.labelToIdMap.insurance[selectedId] || selectedId;
+                        document.getElementById('insurance').value = finalId;
+                        showSuccess(`🎯 Filtrado por convênio: ${label}`);
+                    } else {
+                        showError(`Convênio não encontrado: ${label}`);
+                        return;
+                    }
+                    break;
+                }
+                case 'unitChart': {
+                    selectedId = window.labelToIdMap.unit[label] || 
+                                 Object.keys(window.labelToIdMap.unit).find(key => 
+                                     key.toLowerCase() === String(label).toLowerCase()
+                                 );
+                    
+                    if (selectedId) {
+                        const finalId = window.labelToIdMap.unit[selectedId] || selectedId;
+                        document.getElementById('unit').value = finalId;
+                        showSuccess(`🎯 Filtrado por unidade: ${label}`);
+                    } else {
+                        showError(`Unidade não encontrada: ${label}`);
+                        return;
+                    }
+                    break;
+                }
+                case 'ageChart':
+                    showSuccess(`Selecionado: ${label}`);
+                    return;
+                default:
+                    return;
+            }
+            
+            updateActiveFiltersIndicator();
+            loadDashboard();
+            loadAppointmentsTable();
+        }
+
+        function updateActiveFiltersIndicator() {
+            const filtersContainer = document.getElementById('activeFiltersContainer');
+            const period = document.getElementById('period').value;
+            const unit = document.getElementById('unit').value;
+            const insurance = document.getElementById('insurance').value;
+            const specialty = document.getElementById('specialty').value;
+            const minAge = document.getElementById('minAge').value;
+            const maxAge = document.getElementById('maxAge').value;
+
+            const activeFilters = [];
+            
+            // Função helper para obter nomes dos filtros
+            const getInsuranceName = (id) => {
+                // Inverter o mapa para achar o nome pelo ID
+                for (let [name, idValue] of Object.entries(window.labelToIdMap.insurance)) {
+                    if (idValue === id) return name;
+                }
+                return id; // fallback para o ID
+            };
+            
+            const getUnitName = (id) => {
+                // Inverter o mapa para achar o Nome pelo ID
+                for (let [name, idValue] of Object.entries(window.labelToIdMap.unit)) {
+                    if (idValue === id) return name;
+                }
+                return id; // fallback para o ID
+            };
+            
+            const getSpecialtyName = (specialty) => {
+                // Especialidade é igual ao nome
+                return specialty || specialty;
+            };
+
+            if (period !== 'month') activeFilters.push({ type: 'period', value: period, label: `Período: ${period}` });
+            if (unit) activeFilters.push({ type: 'unit', value: unit, label: `Unidade: ${getUnitName(unit)}` });
+            if (insurance) activeFilters.push({ type: 'insurance', value: insurance, label: `Convênio: ${getInsuranceName(insurance)}` });
+            if (specialty) activeFilters.push({ type: 'specialty', value: specialty, label: `Especialidade: ${getSpecialtyName(specialty)}` });
+            if (minAge || maxAge) activeFilters.push({ type: 'age', value: `${minAge || '0'}-${maxAge || '120'}`, label: `Idade: ${minAge || '0'}-${maxAge || '120'}` });
+
+            if (activeFilters.length === 0) {
+                filtersContainer.innerHTML = '';
+                return;
+            }
+
+            let html = '<div class="active-filters">📌 Filtros ativos:';
+            activeFilters.forEach(filter => {
+                html += `<div class="filter-tag">${filter.label} <button onclick="clearSpecificFilter('${filter.type}')">✕</button></div>`;
+            });
+            html += '</div>';
+            filtersContainer.innerHTML = html;
+
+            // Destacar inputs que têm filtros
+            document.getElementById('period').classList.toggle('filtered-select', period !== 'month');
+            document.getElementById('unit').classList.toggle('filtered-select', !!unit);
+            document.getElementById('insurance').classList.toggle('filtered-select', !!insurance);
+            document.getElementById('specialty').classList.toggle('filtered-select', !!specialty);
+        }
+
+        function clearSpecificFilter(filterType) {
+            switch(filterType) {
+                case 'period':
+                    document.getElementById('period').value = 'month';
+                    break;
+                case 'unit':
+                    document.getElementById('unit').value = '';
+                    break;
+                case 'insurance':
+                    document.getElementById('insurance').value = '';
+                    break;
+                case 'specialty':
+                    document.getElementById('specialty').value = '';
+                    break;
+                case 'age':
+                    document.getElementById('minAge').value = '';
+                    document.getElementById('maxAge').value = '';
+                    break;
+            }
+            updateDateInputs();
+            updateActiveFiltersIndicator();
+            loadDashboard();
+            loadAppointmentsTable();
+        }
+
+        // Criar gráfico com Chart.js com suporte a drill-down
         function createChart(canvasId, type, labels, data, label) {
             const canvas = document.getElementById(canvasId);
             if (window.charts && window.charts[canvasId]) {
@@ -1307,6 +1562,13 @@
                 options: {
                     responsive: true,
                     maintainAspectRatio: false,
+                    onClick: function(event, elements) {
+                        if (elements && elements.length > 0) {
+                            const index = elements[0].index;
+                            const clickedLabel = labels[index];
+                            applyChartFilter(canvasId, clickedLabel);
+                        }
+                    },
                     plugins: {
                         legend: {
                             position: 'bottom',
@@ -1335,6 +1597,9 @@
                     } : {}
                 }
             });
+            
+            // Adicionar cursor pointer para indicar interatividade
+            canvas.style.cursor = 'pointer';
         }
 
         // Criar gráfico de agendamento por horário x terapia (barras empilhadas)
@@ -1417,9 +1682,13 @@
             document.getElementById('unit').value = '';
             document.getElementById('insurance').value = '';
             document.getElementById('specialty').value = '';
+            document.getElementById('minAge').value = '';
+            document.getElementById('maxAge').value = '';
             document.getElementById('startDate').value = '';
             document.getElementById('endDate').value = '';
             updateDateInputs();
+            updateActiveFiltersIndicator();
+            showSuccess('✨ Filtros limpos com sucesso!');
             loadDashboard();
             loadAppointmentsTable();
         }
@@ -1429,11 +1698,7 @@
             if (window._lastScheduleAppointments) createScheduleChart('scheduleChart', window._lastScheduleAppointments, slot);
         }
 
-        // Mostrar mensagem de erro
-        function showError(message) {
-            document.getElementById('message').innerHTML = `<div class="error">❌ ${message}</div>`;
-        }
-
+        // Debug function para verificar mapas
         // Mostrar mensagem de sucesso
         function showSuccess(message) {
             document.getElementById('message').innerHTML = `<div class="success">✅ ${message}</div>`;
@@ -1562,13 +1827,13 @@
         }
 
         // Recarregar gráficos e tabela ao mudar filtros
-        document.getElementById('period')?.addEventListener('change', () => { loadDashboard(); loadAppointmentsTable(); });
+        document.getElementById('period')?.addEventListener('change', () => { updateActiveFiltersIndicator(); loadDashboard(); loadAppointmentsTable(); });
         document.getElementById('scheduleSlotSelect')?.addEventListener('change', () => { const slot = Number(document.getElementById('scheduleSlotSelect').value||60); if(window._lastScheduleAppointments) createScheduleChart('scheduleChart', window._lastScheduleAppointments, slot); });
-        document.getElementById('unit')?.addEventListener('change', () => { loadDashboard(); loadAppointmentsTable(); });
-        document.getElementById('insurance')?.addEventListener('change', () => { loadDashboard(); loadAppointmentsTable(); });
-        document.getElementById('specialty')?.addEventListener('change', () => { loadDashboard(); loadAppointmentsTable(); });
-        document.getElementById('minAge')?.addEventListener('input', () => { loadDashboard(); loadAppointmentsTable(); });
-        document.getElementById('maxAge')?.addEventListener('input', () => { loadDashboard(); loadAppointmentsTable(); });
+        document.getElementById('unit')?.addEventListener('change', () => { updateActiveFiltersIndicator(); loadDashboard(); loadAppointmentsTable(); });
+        document.getElementById('insurance')?.addEventListener('change', () => { updateActiveFiltersIndicator(); loadDashboard(); loadAppointmentsTable(); });
+        document.getElementById('specialty')?.addEventListener('change', () => { updateActiveFiltersIndicator(); loadDashboard(); loadAppointmentsTable(); });
+        document.getElementById('minAge')?.addEventListener('input', () => { updateActiveFiltersIndicator(); loadDashboard(); loadAppointmentsTable(); });
+        document.getElementById('maxAge')?.addEventListener('input', () => { updateActiveFiltersIndicator(); loadDashboard(); loadAppointmentsTable(); });
 
         // Inicializar ao carregar página
         init();
